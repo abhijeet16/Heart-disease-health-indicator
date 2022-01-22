@@ -19,8 +19,6 @@ df[,1]<-factor(df[,1])
 heart_disease_data <- read.csv2("data3.csv", sep=",")
 heart_disease_data[,1]<-factor(heart_disease_data[,1])
 
-
-
 # Summary
 summary(df)
 

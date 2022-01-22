@@ -152,13 +152,6 @@ tprOptTree[16:19] <- 0.0
 fprOptTree[16:19] <- 0.0
 
 
-tpr_logR
-fpr_logR
-
-
-tprOptTree
-fprOptTree
-
 plot(fpr_logR, tpr_logR, type="l", col="blue",
      xlab="FPR", ylab="TPR", xlim=c(0,0.8), ylim=c(0,1))
 lines(fprOptTree, tprOptTree, col="red", type="l")
