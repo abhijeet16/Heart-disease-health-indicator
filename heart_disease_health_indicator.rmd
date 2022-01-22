@@ -1,0 +1,498 @@
+---
+title: "Heart disease health indicator"
+author: "Abhijeet Anand(abhan872) and Hussnain Khalid(huskh803)"
+date: "12/16/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Heart Disease is among the most prevalent chronic diseases, which impacts millions of civilians every year and exerting a significant financial burden on the economy of the country. The build up of plaques inside larger coronary arteries, molecular changes associated with aging, chronic inflammation, high blood pressure, and diabetes are all causes of and risk factors for heart disease.
+
+The Centre for Disease Control and Prevention has identified high blood pressure, high blood cholesterol, and smoking as three key risk factors for heart disease. While, The National Heart, Lung, and Blood Institute highlights a wider array of factors such as Age, Environment and Occupation, Family History and Genetics, Lifestyle Habits, Other Medical Conditions, Race or Ethnicity, and Sex for clinicians to use in diagnosing coronary heart disease.
+
+This dataset contains cleaned 100,638 survey responses from BRFSS 2015 to be used primarily for the binary classification of heart disease. There is good class imbalance in this dataset. 76745 respondents do not have/had heart disease while 23,893 have/had heart disease. \newline
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# Libraries
+################################################################################
+library(ggplot2)
+library(tree)
+library(caret)
+library(dplyr)
+library(e1071)
+library(readxl)
+library(pROC)
+```
+
+```{r, echo=FALSE, warning=FALSE}
+################################################################################
+## Load data
+# Data Processing
+################################################################################
+# Load data
+df <- read.csv2("data3.csv", sep=",")
+df[,1]<-factor(df[,1])
+
+heart_disease_data <- read.csv2("data3.csv", sep=",")
+heart_disease_data[,1]<-factor(heart_disease_data[,1])
+```
+
+
+Below is the summary of the data that we use:
+```{r, echo=FALSE}
+# Summary
+summary(df)
+```
+
+
+```{r, echo=FALSE}
+# Factorize BMI data
+temp <- df$BMI
+for(i in 1:length(temp)){
+  if(temp[i]>31) {
+    temp[i] <-4
+  } else if(temp[i]>27 && temp[i]<32) {
+    temp[i] <- 3
+  } else if(temp[i]>24 && temp[i]<28) {
+    temp[i] <- 2
+  } else {
+    temp[i] <- 1
+  }
+}
+df$BMI <- temp
+
+# Removing NA's
+df <- na.omit(df)
+################################################################################
+
+# Partition data into training(40), validation(30) and test(30)
+################################################################################
+n=dim(df)[1]
+set.seed(12345)
+
+## Training Data
+id=sample(1:n, floor(n*0.4))
+train=df[id,]
+
+id1=setdiff(1:n, id)
+set.seed(12345)
+
+## Validation data
+id2=sample(id1, floor(n*0.3))
+valid=df[id2,]
+
+## Testing data
+id3=setdiff(id1,id2)
+test=df[id3,]
+################################################################################
+```
+
+
+Now, we checking the data we several models namely SVM, decision tree, and Logistic Regeresion.
+```{r, echo=FALSE}
+# Models
+################################################################################
+# Decision Tree with default settings
+dt_default <- tree(formula = HeartDiseaseorAttack~.,
+data = train,
+method="class")
+
+
+# SVM with default settings
+svm_default = svm(formula = HeartDiseaseorAttack~.,
+                  data = train,
+                  type = 'C-classification',
+                  kernel = 'linear')
+################################################################################
+
+# Predictions
+################################################################################
+# decision tree
+pred_dt<- predict(dt_default, test, type = "class")
+
+# SVM
+pred_svm = predict(svm_default, newdata = test)
+################################################################################
+
+
+# Confusion Matrix
+################################################################################
+# decision tree
+cm_dt<-table(pred_dt, test$HeartDiseaseorAttack)
+
+# SVM
+cm_svm = table(pred_svm, test[,1])
+################################################################################
+
+# Misclassification error
+################################################################################
+# decision tree
+mmce_dt <- 1 - sum(diag(cm_dt)) / sum(cm_dt)
+
+# SVM
+mmce_svm <- 1 - sum(diag(cm_svm)) / sum(cm_svm)
+################################################################################
+
+# F1 Score
+################################################################################
+# SVM
+TN_svm <- cm_svm[1,1]
+TP_svm <- cm_svm[2,2]
+FN_svm <- cm_svm[1,2]
+FP_svm <- cm_svm[2,1]
+precision_svm <- (TP_svm) / (TP_svm + FP_svm) # 0.6753752
+recall_score_svm <- (FP_svm) / (FP_svm + TN_svm) # 0.05079365
+f1_score_svm <- 2 * ((precision_svm * recall_score_svm) / (precision_svm + recall_score_svm))
+################################################################################
+
+
+# Accuracy
+################################################################################
+# SVM
+accuracy_svm <- (TP_svm + TN_svm) / (TP_svm + TN_svm + FP_svm + FN_svm)
+################################################################################
+
+
+# Plot
+################################################################################
+roc_svm <- roc(response = test$HeartDiseaseorAttack, predictor =as.numeric(pred_svm))
+plot(roc_svm, col = "green")
+legend(0.3, 0.2, legend = c("SVM"), lty = c(1), col = c("green"))
+################################################################################
+```
+
+Since, we modeled using SVM and decision tree. Below are the results from the same.
+```{r, echo=FALSE, warning=FALSE}
+cat(paste("Misclassification error from decision tree: ",mmce_dt))
+cat(paste("Misclassification error from SVM: ",mmce_svm))
+```
+
+Now, we will prune the decision tree.
+```{r, echo=FALSE, , warning=FALSE}
+# Pruning Tree
+set.seed(12345)
+trainScore = rep(0, 100)
+testScore = rep(0, 100)
+
+for(i in 2:100) {
+  prunedTree = prune.tree(dt_default, best=i)
+  pd = predict(prunedTree, newdata = valid, type= "tree")
+  trainScore[i] = deviance(prunedTree)
+  testScore[i] = deviance(pd)
+}
+
+optimalLeaves <- which.min(testScore[2:100])
+
+optimalTree = prune.tree(dt_default, best=optimalLeaves)
+predOptimalTree = predict(optimalTree, newdata= valid, type="class")
+
+cnfMatrixOptimalTree <- table(valid$HeartDiseaseorAttack, predOptimalTree)
+```
+
+Let's see the result from the pruned tree. We print the confusion matrix from the pruned tee.
+```{r, echo=FALSE}
+cnfMatrixOptimalTree
+```
+
+Finally, we use the Logistic regression model.
+```{r, echo=FALSE}
+# Logistic Regression
+pi_generator <- seq(0.05, 0.95, 0.05)
+logiReg <- glm(formula = HeartDiseaseorAttack~., data = train, family = "binomial")
+logiRegPred <- predict(logiReg, select(test, -c(HeartDiseaseorAttack)), type = "response")
+
+confList <- list()
+for(i in pi_generator) {
+  a <- as.factor(ifelse(logiRegPred>i, 'yes', 'no'))
+  b <- table(a, test$HeartDiseaseorAttack)
+  confList <- c(confList, list(b))
+}
+
+tpr_logR <- c()
+fpr_logR <- c()
+total_loop <- length(pi_generator)-1
+for (iter in 1:18) {
+  tpr_value <- confList[[iter]][4]/(confList[[iter]][3]+confList[[iter]][4])
+  tpr_logR <- c(tpr_logR, tpr_value)
+  
+  fpr_value <- confList[[iter]][2]/(confList[[iter]][1]+confList[[iter]][2])
+  fpr_logR <- c(fpr_logR, fpr_value)
+}
+
+
+# Classify test data with Optimal Tree
+optimalTreePred = predict(optimalTree, newdata= test, type="vector")
+confListOptTree <- list()
+for(i in pi_generator) {
+  k <- as.factor(ifelse(optimalTreePred[,2]>i, 'yes', 'no'))
+  l <- table(k, test$HeartDiseaseorAttack)
+  confListOptTree <- c(confListOptTree, list(l))
+}
+
+tprOptTree <- c()
+fprOptTree <- c()
+
+for (iter1 in 1:19) {
+  TP <- confListOptTree[[iter1]][4]
+  P <- (confListOptTree[[iter1]][3]+confListOptTree[[iter1]][4])
+  tpr_value <- TP/P
+  tprOptTree <- c(tprOptTree, tpr_value)
+  
+  FP <- confListOptTree[[iter1]][2]
+  N <- (confListOptTree[[iter1]][1]+confListOptTree[[iter1]][2])
+  fpr_value <- FP/N
+  fprOptTree <- c(fprOptTree, fpr_value)
+}
+tprOptTree[16:19] <- 0.0
+fprOptTree[16:19] <- 0.0
+```
+
+
+Let's plot the ROC curve for the comparison of decision tree and Logistic regression. \newline
+```{r, echo=FALSE}
+plot(fpr_logR, tpr_logR, type="l", col="blue",
+     xlab="FPR", ylab="TPR", xlim=c(0,0.8), ylim=c(0,1))
+lines(fprOptTree, tprOptTree, col="red", type="l")
+title("ROC Curve")
+legend("bottomright", legend=c("Logistic Reg","Optimal Tree"),
+       col=c("blue","red"), lty = 1)
+```
+
+
+Finally, we show the accuracy for all the diffent models.
+```{r, echo=FALSE}
+accuracy_dt = 1-mmce_dt
+accuracy_dt
+cat(paste("Accuracy from decision tree: ", accuracy_dt))
+cat(paste("Accuracy from SVM: ", accuracy_svm))
+```
+
+Since, we find SVM and decision tree with better accuracy, we prefer these two models.
+
+# APPENDIX
+```{r, echo=TRUE, eval=FALSE}
+# Libraries
+################################################################################
+library(ggplot2)
+library(tree)
+library(caret)
+library(dplyr)
+library(e1071)
+library(readxl)
+library(pROC)
+################################################################################
+
+################################################################################
+## Load data
+# Data Processing
+################################################################################
+# Load data
+df <- read.csv2("data3.csv", sep=",")
+df[,1]<-factor(df[,1])
+
+heart_disease_data <- read.csv2("data3.csv", sep=",")
+heart_disease_data[,1]<-factor(heart_disease_data[,1])
+
+# Summary
+summary(df)
+
+
+# Factorize BMI data
+temp <- df$BMI
+for(i in 1:length(temp)){
+  if(temp[i]>31) {
+    temp[i] <-4
+  } else if(temp[i]>27 && temp[i]<32) {
+    temp[i] <- 3
+  } else if(temp[i]>24 && temp[i]<28) {
+    temp[i] <- 2
+  } else {
+    temp[i] <- 1
+  }
+}
+df$BMI <- temp
+
+# Removing NA's
+df <- na.omit(df)
+################################################################################
+
+# Partition data into training(40), validation(30) and test(30)
+################################################################################
+n=dim(df)[1]
+set.seed(12345)
+
+## Training Data
+id=sample(1:n, floor(n*0.4))
+train=df[id,]
+
+id1=setdiff(1:n, id)
+set.seed(12345)
+
+## Validation data
+id2=sample(id1, floor(n*0.3))
+valid=df[id2,]
+
+## Testing data
+id3=setdiff(id1,id2)
+test=df[id3,]
+################################################################################
+
+
+# Models
+################################################################################
+# Decision Tree with default settings
+dt_default <- tree(formula = HeartDiseaseorAttack~.,
+data = train,
+method="class")
+
+
+# SVM with default settings
+svm_default = svm(formula = HeartDiseaseorAttack~.,
+                  data = train,
+                  type = 'C-classification',
+                  kernel = 'linear')
+################################################################################
+
+# Predictions
+################################################################################
+# decision tree
+pred_dt<- predict(dt_default, test, type = "class")
+
+# SVM
+pred_svm = predict(svm_default, newdata = test)
+################################################################################
+
+
+# Confusion Matrix
+################################################################################
+# decision tree
+cm_dt<-table(pred_dt, test$HeartDiseaseorAttack)
+
+# SVM
+cm_svm = table(pred_svm, test[,1])
+################################################################################
+
+# Misclassification error
+################################################################################
+# decision tree
+mmce_dt <- 1 - sum(diag(cm_dt)) / sum(cm_dt)
+
+# SVM
+mmce_svm <- 1 - sum(diag(cm_svm)) / sum(cm_svm)
+################################################################################
+
+# F1 Score
+################################################################################
+# SVM
+TN_svm <- cm_svm[1,1]
+TP_svm <- cm_svm[2,2]
+FN_svm <- cm_svm[1,2]
+FP_svm <- cm_svm[2,1]
+precision_svm <- (TP_svm) / (TP_svm + FP_svm) # 0.6753752
+recall_score_svm <- (FP_svm) / (FP_svm + TN_svm) # 0.05079365
+f1_score_svm <- 2 * ((precision_svm * recall_score_svm) / (precision_svm + recall_score_svm))
+################################################################################
+
+
+# Accuracy
+################################################################################
+# SVM
+accuracy_svm <- (TP_svm + TN_svm) / (TP_svm + TN_svm + FP_svm + FN_svm)
+################################################################################
+
+
+# Plot
+################################################################################
+roc_svm <- roc(response = test$HeartDiseaseorAttack, predictor =as.numeric(pred_svm))
+plot(roc_svm, col = "green")
+legend(0.3, 0.2, legend = c("SVM"), lty = c(1), col = c("green"))
+################################################################################
+
+cat(paste("Misclassification error from decision tree: ",mmce_dt))
+cat(paste("Misclassification error from SVM: ",mmce_svm))
+
+# Pruning Tree
+set.seed(12345)
+trainScore = rep(0, 100)
+testScore = rep(0, 100)
+
+for(i in 2:100) {
+  prunedTree = prune.tree(dt_default, best=i)
+  pd = predict(prunedTree, newdata = valid, type= "tree")
+  trainScore[i] = deviance(prunedTree)
+  testScore[i] = deviance(pd)
+}
+
+optimalLeaves <- which.min(testScore[2:100])
+
+optimalTree = prune.tree(dt_default, best=optimalLeaves)
+predOptimalTree = predict(optimalTree, newdata= valid, type="class")
+
+cnfMatrixOptimalTree <- table(valid$HeartDiseaseorAttack, predOptimalTree)
+cnfMatrixOptimalTree
+
+# Logistic Regression
+pi_generator <- seq(0.05, 0.95, 0.05)
+logiReg <- glm(formula = HeartDiseaseorAttack~., data = train, family = "binomial")
+logiRegPred <- predict(logiReg, select(test, -c(HeartDiseaseorAttack)), type = "response")
+
+confList <- list()
+for(i in pi_generator) {
+  a <- as.factor(ifelse(logiRegPred>i, 'yes', 'no'))
+  b <- table(a, test$HeartDiseaseorAttack)
+  confList <- c(confList, list(b))
+}
+
+tpr_logR <- c()
+fpr_logR <- c()
+total_loop <- length(pi_generator)-1
+for (iter in 1:18) {
+  tpr_value <- confList[[iter]][4]/(confList[[iter]][3]+confList[[iter]][4])
+  tpr_logR <- c(tpr_logR, tpr_value)
+  
+  fpr_value <- confList[[iter]][2]/(confList[[iter]][1]+confList[[iter]][2])
+  fpr_logR <- c(fpr_logR, fpr_value)
+}
+
+
+# Classify test data with Optimal Tree
+optimalTreePred = predict(optimalTree, newdata= test, type="vector")
+confListOptTree <- list()
+for(i in pi_generator) {
+  k <- as.factor(ifelse(optimalTreePred[,2]>i, 'yes', 'no'))
+  l <- table(k, test$HeartDiseaseorAttack)
+  confListOptTree <- c(confListOptTree, list(l))
+}
+
+tprOptTree <- c()
+fprOptTree <- c()
+
+for (iter1 in 1:19) {
+  TP <- confListOptTree[[iter1]][4]
+  P <- (confListOptTree[[iter1]][3]+confListOptTree[[iter1]][4])
+  tpr_value <- TP/P
+  tprOptTree <- c(tprOptTree, tpr_value)
+  
+  FP <- confListOptTree[[iter1]][2]
+  N <- (confListOptTree[[iter1]][1]+confListOptTree[[iter1]][2])
+  fpr_value <- FP/N
+  fprOptTree <- c(fprOptTree, fpr_value)
+}
+tprOptTree[16:19] <- 0.0
+fprOptTree[16:19] <- 0.0
+
+plot(fpr_logR, tpr_logR, type="l", col="blue",
+     xlab="FPR", ylab="TPR", xlim=c(0,0.8), ylim=c(0,1))
+lines(fprOptTree, tprOptTree, col="red", type="l")
+title("ROC Curve")
+legend("bottomright", legend=c("Logistic Reg","Optimal Tree"),
+       col=c("blue","red"), lty = 1)
+
+# Accuracies
+accuracy_dt = 1-mmce_dt
+accuracy_dt
+cat(paste("Accuracy from decision tree: ", accuracy_dt))
+cat(paste("Accuracy from SVM: ", accuracy_svm))
+```
