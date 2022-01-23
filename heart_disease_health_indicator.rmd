@@ -37,6 +37,7 @@ df[,1]<-factor(df[,1])
 
 heart_disease_data <- read.csv2("data3.csv", sep=",")
 heart_disease_data[,1]<-factor(heart_disease_data[,1])
+
 ```
 
 
@@ -44,6 +45,7 @@ Below is the summary of the data that we use:
 ```{r, echo=FALSE}
 # Summary
 summary(df)
+
 ```
 
 
@@ -87,10 +89,17 @@ valid=df[id2,]
 id3=setdiff(id1,id2)
 test=df[id3,]
 ################################################################################
+
 ```
 
 
-Now, we checking the data we several models namely SVM, decision tree, and Logistic Regeresion.
+Now, we checking the data we several models namely SVM, decision tree, and Logistic Regression.
+
+## Models
+### Decision Tree
+A decision tree is a graphical representation of all possible solutions to a decision based on certain conditions. On each step or node of a decision tree, used for classification, we try to form a condition on the features to separate all the labels or classes contained in the dataset to the fullest purity. A tree is built by splitting the source set, constituting the root node of the tree, into subsets—which constitute the successor children. The splitting is based on a set of splitting rules based on classification features. With the current dataset, a decision tree is learned on training data.
+
+
 ```{r, echo=FALSE}
 # Models
 ################################################################################
@@ -99,7 +108,14 @@ dt_default <- tree(formula = HeartDiseaseorAttack~.,
 data = train,
 method="class")
 
+```
 
+
+### SVM(Support Vector Machine)
+Support vector machines (SVMs) are a set of supervised learning methods used for classification, regression and outliers detection. A support-vector machine constructs a hyperplane or set of hyperplanes in a high- or infinite-dimensional space. a good separation is achieved by the hyperplane that has the largest distance to the nearest training-data point of any class (so-called functional margin. The advantages of support vector machines are: Effective in high dimensional spaces. Still effective in cases where number of dimensions is greater than the number of samples.The main disadvantage of the SVM algorithm is that it has several key parameters that need to be set correctly to achieve the best classification results for any given problem
+
+
+```{r, echo=FALSE}
 # SVM with default settings
 svm_default = svm(formula = HeartDiseaseorAttack~.,
                   data = train,
@@ -107,6 +123,9 @@ svm_default = svm(formula = HeartDiseaseorAttack~.,
                   kernel = 'linear')
 ################################################################################
 
+```
+
+```{r, echo=FALSE}
 # Predictions
 ################################################################################
 # decision tree
@@ -137,6 +156,15 @@ mmce_svm <- 1 - sum(diag(cm_svm)) / sum(cm_svm)
 
 # F1 Score
 ################################################################################
+# Decision tree
+TN_dt <- cm_dt[1,1]
+TP_dt <- cm_dt[2,2]
+FN_dt <- cm_dt[1,2]
+FP_dt <- cm_dt[2,1]
+precision_dt <- (TP_dt) / (TP_dt + FP_dt) # 0.569035
+recall_score_dt <- (FP_dt) / (FP_dt + TN_dt) # 0.08836704
+f1_score_dt <- 2 * ((precision_dt * recall_score_dt) / (precision_dt + recall_score_dt))
+
 # SVM
 TN_svm <- cm_svm[1,1]
 TP_svm <- cm_svm[2,2]
@@ -150,23 +178,75 @@ f1_score_svm <- 2 * ((precision_svm * recall_score_svm) / (precision_svm + recal
 
 # Accuracy
 ################################################################################
+# Decision tree
+accuracy_dt <- (TP_dt + TN_dt) / (TP_dt + TN_dt + FP_dt + FN_dt)
+
 # SVM
 accuracy_svm <- (TP_svm + TN_svm) / (TP_svm + TN_svm + FP_svm + FN_svm)
 ################################################################################
 
-
-# Plot
-################################################################################
-roc_svm <- roc(response = test$HeartDiseaseorAttack, predictor =as.numeric(pred_svm))
-plot(roc_svm, col = "green")
-legend(0.3, 0.2, legend = c("SVM"), lty = c(1), col = c("green"))
-################################################################################
 ```
 
+
 Since, we modeled using SVM and decision tree. Below are the results from the same.
+
+Confusion Matrix from Decision Tree
+```{r, warning=FALSE}
+cm_dt
+```
+
+Confusion Matrix from SVM
+```{r, warning=FALSE}
+cm_svm
+```
+
+F1 Score from Decision Tree
+```{r, warning=FALSE}
+f1_score_dt # 0.1529777
+```
+
+F1 Score from SVM
+```{r, warning=FALSE}
+f1_score_svm # 0.09448153
+```
+
+Accuracy from Decision Tree
+```{r, warning=FALSE}
+accuracy_dt # 0.7831876
+```
+
+Accuracy from SVM
+```{r, echo=FALSE, warning=FALSE}
+accuracy_svm # 0.8034247
+```
+
 ```{r, echo=FALSE, warning=FALSE}
 cat(paste("Misclassification error from decision tree: ",mmce_dt))
 cat(paste("Misclassification error from SVM: ",mmce_svm))
+```
+
+
+### ROC Curve
+A receiver operating characteristic curve, or ROC curve, is a graphical plot that illustrates the diagnostic ability of a binary classifier system as its discrimination threshold is varied. The ROC curve shows the trade-off between sensitivity (or TPR) and specificity (1 – FPR). Classifiers that give curves closer to the top-left corner indicate a better performance. The closer the curve comes to the 45-degree diagonal of the ROC space, the less accurate the test. 
+
+```{r, echo=FALSE, out.width="40%", out.height="40%"}
+# ROC Plot
+################################################################################
+# fpr_dt <- FP_dt/(FP_dt+TN_dt)
+# tpr_dt <- TP_dt/(TP_dt+FN_dt)
+# fpr_svm <- FP_svm/(FP_svm+TN_svm)
+# tpr_svm <- TP_svm/(TP_svm+FN_svm)
+roc_dt <- roc(response = test$HeartDiseaseorAttack, predictor =as.numeric(pred_dt))
+roc_svm <- roc(response = test$HeartDiseaseorAttack, predictor =as.numeric(pred_svm))
+
+```
+
+An ROC plot for SVM and Decision tree is plotted below separately, which is shown below.
+```{r, echo=FALSE}
+par(mfrow=c(1,2))
+plot(roc_svm, col = "green", main = c("SVM"))
+plot(roc_dt, col = "red", main = c("Decision tree"))
+
 ```
 
 Now, we will prune the decision tree.
@@ -194,9 +274,13 @@ cnfMatrixOptimalTree <- table(valid$HeartDiseaseorAttack, predOptimalTree)
 Let's see the result from the pruned tree. We print the confusion matrix from the pruned tee.
 ```{r, echo=FALSE}
 cnfMatrixOptimalTree
+
 ```
 
-Finally, we use the Logistic regression model.
+
+### Logistic Regression
+Logistic regression is a supervised learning classification algorithm used to predict the probability of a target variable. It is one of the simplest ML algorithms that can be used for various classification problems. Logistic regression is easier to implement, interpret, and very efficient to train. If the number of observations is lesser than the number of features, Logistic Regression should not be used, otherwise, it may lead to overfitting.
+
 ```{r, echo=FALSE}
 # Logistic Regression
 pi_generator <- seq(0.05, 0.95, 0.05)
@@ -247,6 +331,7 @@ for (iter1 in 1:19) {
 }
 tprOptTree[16:19] <- 0.0
 fprOptTree[16:19] <- 0.0
+
 ```
 
 
@@ -258,15 +343,17 @@ lines(fprOptTree, tprOptTree, col="red", type="l")
 title("ROC Curve")
 legend("bottomright", legend=c("Logistic Reg","Optimal Tree"),
        col=c("blue","red"), lty = 1)
+
 ```
 
 
-Finally, we show the accuracy for all the diffent models.
+Finally, we show the accuracy for all the different models.
 ```{r, echo=FALSE}
 accuracy_dt = 1-mmce_dt
 accuracy_dt
 cat(paste("Accuracy from decision tree: ", accuracy_dt))
 cat(paste("Accuracy from SVM: ", accuracy_svm))
+
 ```
 
 Since, we find SVM and decision tree with better accuracy, we prefer these two models.
@@ -355,6 +442,7 @@ svm_default = svm(formula = HeartDiseaseorAttack~.,
                   kernel = 'linear')
 ################################################################################
 
+
 # Predictions
 ################################################################################
 # decision tree
@@ -374,6 +462,7 @@ cm_dt<-table(pred_dt, test$HeartDiseaseorAttack)
 cm_svm = table(pred_svm, test[,1])
 ################################################################################
 
+
 # Misclassification error
 ################################################################################
 # decision tree
@@ -383,8 +472,18 @@ mmce_dt <- 1 - sum(diag(cm_dt)) / sum(cm_dt)
 mmce_svm <- 1 - sum(diag(cm_svm)) / sum(cm_svm)
 ################################################################################
 
+
 # F1 Score
 ################################################################################
+# Decision tree
+TN_dt <- cm_dt[1,1]
+TP_dt <- cm_dt[2,2]
+FN_dt <- cm_dt[1,2]
+FP_dt <- cm_dt[2,1]
+precision_dt <- (TP_dt) / (TP_dt + FP_dt) # 0.569035
+recall_score_dt <- (FP_dt) / (FP_dt + TN_dt) # 0.08836704
+f1_score_dt <- 2 * ((precision_dt * recall_score_dt) / (precision_dt + recall_score_dt))
+
 # SVM
 TN_svm <- cm_svm[1,1]
 TP_svm <- cm_svm[2,2]
@@ -398,22 +497,29 @@ f1_score_svm <- 2 * ((precision_svm * recall_score_svm) / (precision_svm + recal
 
 # Accuracy
 ################################################################################
+# Decision tree
+accuracy_dt <- (TP_dt + TN_dt) / (TP_dt + TN_dt + FP_dt + FN_dt)
+
 # SVM
 accuracy_svm <- (TP_svm + TN_svm) / (TP_svm + TN_svm + FP_svm + FN_svm)
 ################################################################################
 
 
-# Plot
+# ROC Plot
 ################################################################################
+# fpr_dt <- FP_dt/(FP_dt+TN_dt)
+# tpr_dt <- TP_dt/(TP_dt+FN_dt)
+# fpr_svm <- FP_svm/(FP_svm+TN_svm)
+# tpr_svm <- TP_svm/(TP_svm+FN_svm)
+roc_dt <- roc(response = test$HeartDiseaseorAttack, predictor =as.numeric(pred_dt))
 roc_svm <- roc(response = test$HeartDiseaseorAttack, predictor =as.numeric(pred_svm))
-plot(roc_svm, col = "green")
-legend(0.3, 0.2, legend = c("SVM"), lty = c(1), col = c("green"))
-################################################################################
+par(mfrow=c(1,2))
+plot(roc_svm, col = "green", main = c("SVM"))
+plot(roc_dt, col = "red", main = c("Decision tree"))
 
-cat(paste("Misclassification error from decision tree: ",mmce_dt))
-cat(paste("Misclassification error from SVM: ",mmce_svm))
 
 # Pruning Tree
+################################################################################
 set.seed(12345)
 trainScore = rep(0, 100)
 testScore = rep(0, 100)
@@ -433,7 +539,9 @@ predOptimalTree = predict(optimalTree, newdata= valid, type="class")
 cnfMatrixOptimalTree <- table(valid$HeartDiseaseorAttack, predOptimalTree)
 cnfMatrixOptimalTree
 
+
 # Logistic Regression
+################################################################################
 pi_generator <- seq(0.05, 0.95, 0.05)
 logiReg <- glm(formula = HeartDiseaseorAttack~., data = train, family = "binomial")
 logiRegPred <- predict(logiReg, select(test, -c(HeartDiseaseorAttack)), type = "response")
@@ -490,7 +598,9 @@ title("ROC Curve")
 legend("bottomright", legend=c("Logistic Reg","Optimal Tree"),
        col=c("blue","red"), lty = 1)
 
+
 # Accuracies
+################################################################################
 accuracy_dt = 1-mmce_dt
 accuracy_dt
 cat(paste("Accuracy from decision tree: ", accuracy_dt))
